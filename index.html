@@ -62,8 +62,17 @@
       </div>
 
       <div id="list" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-
       <div id="empty" class="mt-8 hidden text-center text-gray-500">未找到符合条件的 bug。</div>
+      <!-- 饼状图容器，放在bug列表卡片下方 -->
+      <div id="pie-chart-container" class="mt-10 flex flex-col items-center">
+        <div class="w-full flex items-center justify-center my-8">
+          <div class="w-full max-w-2xl border-t-2 border-dashed border-indigo-200"></div>
+        </div>
+        <h2 class="text-lg font-semibold text-gray-700 mb-4">各层面 Bug 占比</h2>
+        <div style="max-width:800px;max-height:800px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+          <canvas id="pie-chart" width="660" height="660" style="max-width:660px;max-height:660px;"></canvas>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -156,6 +165,68 @@
   </div>
 
   <script>
+    // 引入 Chart.js
+    const chartScript = document.createElement('script');
+    chartScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+    document.head.appendChild(chartScript);
+
+    let pieChartInstance = null;
+
+    function renderPieChart(list) {
+      if (!window.Chart) return chartScript.onload = () => renderPieChart(list);
+      const pieCanvas = document.getElementById('pie-chart');
+      if (!pieCanvas) return;
+      const ctx = pieCanvas.getContext('2d');
+      // 统计各层面数量
+      const catCount = {};
+      list.forEach(item => {
+        const cat = item.category || '未分类';
+        catCount[cat] = (catCount[cat] || 0) + 1;
+      });
+      const labels = Object.keys(catCount);
+      const data = Object.values(catCount);
+      // 精致配色
+      const colors = [
+        '#6366f1','#34d399','#f59e42','#f43f5e','#06b6d4','#a78bfa','#fbbf24','#60a5fa','#c026d3','#84cc16','#f87171','#818cf8','#f472b6','#4ade80','#facc15','#eab308','#f97316','#0ea5e9','#e11d48','#64748b'
+      ];
+      // 销毁旧图
+      if (pieChartInstance) pieChartInstance.destroy();
+      pieChartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: colors.slice(0, labels.length),
+            borderWidth: 2,
+            borderColor: '#fff',
+          }]
+        },
+        options: {
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: {
+                color: '#374151',
+                font: { size: 15, weight: 'bold' },
+                padding: 18
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const total = data.reduce((a,b)=>a+b,0);
+                  const val = context.parsed;
+                  const percent = total ? (val/total*100).toFixed(1) : 0;
+                  return `${context.label}: ${val} (${percent}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
   // 初始数据（已移除示例条目，使用后端/本地缓存数据）
   let data = [];
 
@@ -563,12 +634,24 @@
     if(list.length === 0){
       $empty.classList.remove('hidden');
       $counts.textContent = '';
+      document.getElementById('pagination')?.remove();
+      renderPieChart([]);
       return;
     }
     $empty.classList.add('hidden');
-    $counts.textContent = `${list.length} 个结果`;
 
-    list.forEach(item=>{
+    // 分页参数
+    const pageSize = 9;
+    window._currentPage = window._currentPage || 1;
+    const totalPage = Math.ceil(list.length / pageSize);
+    if(window._currentPage > totalPage) window._currentPage = totalPage || 1;
+    const startIdx = (window._currentPage - 1) * pageSize;
+    const endIdx = startIdx + pageSize;
+    const pageList = list.slice(startIdx, endIdx);
+
+    $counts.textContent = `${list.length} 个结果，${window._currentPage}/${totalPage||1}页`;
+
+    pageList.forEach(item=>{
       const safeId = escapeHtml(item.id || '');
       const safeSymptom = escapeHtml((item.symptom || '').trim() || '无描述');
       const catClass = categoryMap[item.category] || 'bg-gray-200';
@@ -597,6 +680,52 @@
 
       $list.appendChild(el);
     });
+
+    // 分页控件
+    document.getElementById('pagination')?.remove();
+    const pag = document.createElement('div');
+    pag.id = 'pagination';
+    pag.className = 'flex justify-center items-center gap-2 mt-8';
+    if(totalPage > 1){
+      const prev = document.createElement('button');
+      prev.textContent = '上一页';
+      prev.className = 'px-3 py-1 rounded bg-gray-200 hover:bg-gray-300';
+      prev.disabled = window._currentPage === 1;
+      prev.onclick = ()=>{
+        window._currentPage--;
+        render(list);
+        pag.scrollIntoView({behavior:'smooth'});
+      };
+      pag.appendChild(prev);
+
+      for(let i=1;i<=totalPage;i++){
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = 'px-2 py-1 rounded ' + (i===window._currentPage?'bg-indigo-600 text-white':'bg-gray-100 hover:bg-gray-200');
+        btn.onclick = ()=>{
+          window._currentPage = i;
+          render(list);
+          pag.scrollIntoView({behavior:'smooth'});
+        };
+        pag.appendChild(btn);
+      }
+
+      const next = document.createElement('button');
+      next.textContent = '下一页';
+      next.className = 'px-3 py-1 rounded bg-gray-200 hover:bg-gray-300';
+      next.disabled = window._currentPage === totalPage;
+      next.onclick = ()=>{
+        window._currentPage++;
+        render(list);
+        pag.scrollIntoView({behavior:'smooth'});
+      };
+      pag.appendChild(next);
+    }
+    // 插入到bug列表上方（饼状图上方）
+    $list.parentNode.insertBefore(pag, document.getElementById('pie-chart-container'));
+
+    // 渲染饼状图（用全部数据，不分页）
+    renderPieChart(list);
   }
 
   function debounce(fn, wait){
