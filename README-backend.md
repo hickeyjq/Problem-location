@@ -16,7 +16,7 @@ npm install
 3. 启动服务器：
 
 ```
-npm start
+    npm start
 # 或
 node server.js
 ```
