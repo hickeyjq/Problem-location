@@ -273,7 +273,8 @@
   let data = [];
 
   const STORAGE_KEY = 'bug-dashboard-bugs';
-  const API_BASE = 'http://localhost:3000/api/bugs';
+  // 只读模式，fetch静态db.json
+  const API_BASE = 'https://hickeyjq.github.io/Problem-location/db.json';
 
   const categoryMap = {
     'UI': 'badge-ui',
@@ -318,9 +319,9 @@
         data = remote.concat(data.filter(d=>!remote.find(r=>r.id===d.id)));
       }
     }catch(e){
-      console.warn('无法连接后端，使用本地数据回退', e);
-      // 尝试从 localStorage 恢复用户之前的数据（离线场景）
-      try{ const s = localStorage.getItem(STORAGE_KEY); if(s){ const stored = JSON.parse(s); if(Array.isArray(stored)) data = mergeUniqueById(stored.concat(data)); } }catch(err){}
+      console.warn('无法加载远程数据', e);
+      const container = document.getElementById('data-container');
+      if(container) container.textContent = '加载数据失败：' + e.message;
     }
   }
 
