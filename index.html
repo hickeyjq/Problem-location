@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>挖机问题总单</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+  :root{--card-shadow: 0 8px 30px rgba(16,24,40,0.08);}body{font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+  .card-hover{transition:transform .18s ease, box-shadow .18s ease}.card-hover:hover{transform:translateY(-6px); box-shadow:var(--card-shadow)}
+  .badge-ui{background:linear-gradient(90deg,#60a5fa,#7c3aed); color:white}
+  .badge-backend{background:linear-gradient(90deg,#34d399,#06b6d4); color:white}
+  .badge-perf{background:linear-gradient(90deg,#f97316,#f43f5e); color:white}
+  .badge-security{background:linear-gradient(90deg,#ef4444,#c026d3); color:white}
+  .badge-compat{background:linear-gradient(90deg,#f59e0b,#84cc16); color:white}
+  .fade-in{animation:fadeIn .28s ease both}@keyframes fadeIn{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-100 to-indigo-50 min-h-screen font-sans">
+  <header class="max-w-6xl mx-auto py-10 px-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-4xl md:text-5xl font-extrabold text-indigo-700">挖机问题总单</h1>
+        <p class="text-gray-600 mt-1">记录 ID、现象 和 Bug 分类，支持按分类筛选与搜索</p>
+      </div>
+      <div class="hidden md:block">
+        <img src="https://images.unsplash.com/photo-1556157382-97eda2d62296?q=80&w=400&auto=format&fit=crop&ixlib=rb-4.0.3&s=3f8f6b4b0f1d5a7c8c8e4b7a9d6c4b3a" alt="decor" class="w-36 h-24 object-cover rounded-lg shadow-lg">
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 pb-12">
+    <section class="bg-white/80 backdrop-blur-sm shadow-xl rounded-2xl p-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="flex flex-col gap-2 w-full md:w-2/3">
+          <div class="flex items-center gap-3">
+            <input id="search" type="search" placeholder="搜索 ID 或 现象..." class="flex-1 px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            <select id="filter" class="px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none">
+              <option value="" disabled selected>全部层面</option>
+            </select>
+            <select id="tag-filter" class="px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none">
+              <option value="" disabled selected>Tag</option>
+            </select>
+            <button id="open-add" class="px-4 py-2 bg-green-600 text-white rounded-lg hidden md:inline-block">添加 Bug</button>
+          </div>
+          <!-- 当前选中的层面 / Tag，以小标签形式展示，可点击叉号删除 -->
+          <div class="flex flex-wrap gap-2 text-xs text-gray-500">
+            <div id="active-cats" class="flex flex-wrap gap-2"></div>
+            <div id="active-tags" class="flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div id="counts" class="text-sm text-gray-600"></div>
+          <button id="reset" class="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700">重置筛选</button>
+        </div>
+      </div>
+
+      <!-- small-screen add button: show under controls on small screens -->
+      <div class="mt-4 md:hidden">
+        <button id="open-add-sm" class="px-4 py-2 bg-green-600 text-white rounded-lg">添加 Bug</button>
+      </div>
+
+      <div id="list" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+      <div id="empty" class="mt-8 hidden text-center text-gray-500">未找到符合条件的 bug。</div>
+    </section>
+  </main>
+
+  <footer class="max-w-6xl mx-auto px-4 pb-8 text-center text-gray-500 text-sm">
+    2025 挖机问题总单
+  </footer>
+
+  <!-- 详情模态：放在 body 层级，确保悬浮在所有内容之上 -->
+  <div id="detail-modal" class="fixed inset-0 bg-black/40 hidden items-start justify-center z-50 overflow-y-auto">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 mx-4 mt-12 mb-12">
+      <div class="flex items-center justify-between">
+        <h3 id="detail-title" class="text-xl font-semibold">Bug 详情</h3>
+        <button id="detail-close" class="text-gray-500 hover:text-gray-700">关闭 ×</button>
+      </div>
+      <div class="mt-4">
+        <div class="text-sm text-gray-500">ID</div>
+        <div id="detail-id" class="text-lg font-medium mt-1"></div>
+        <div class="text-sm text-gray-500 mt-4">分类</div>
+        <select id="detail-category" class="mt-1 px-3 py-2 rounded-lg border border-gray-200 text-sm">
+          <option value="">未分类</option>
+        </select>
+            <div class="text-sm text-gray-500 mt-4">Tag</div>
+            <div class="mt-1 flex flex-wrap items-center gap-2">
+              <input id="detail-tag-input" class="flex-1 min-w-[120px] p-2 border border-gray-200 rounded-lg text-sm" placeholder="输入 tag 后点 + 号" />
+              <button id="detail-tag-add" class="px-3 py-1 bg-indigo-600 text-white rounded text-sm">+</button>
+            </div>
+            <div id="detail-tag-list" class="mt-2 flex flex-wrap gap-2"></div>
+        <div class="text-sm text-gray-500 mt-4">现象</div>
+        <textarea id="detail-symptom" class="w-full mt-2 p-3 border border-gray-200 rounded-lg" rows="4"></textarea>
+        <div class="text-sm text-gray-500 mt-4">解决方案</div>
+        <textarea id="detail-solution" class="w-full mt-2 p-3 border border-gray-200 rounded-lg" rows="6" placeholder="描述已采取或建议的解决步骤"></textarea>
+        <div class="text-sm text-gray-500 mt-4">链接</div>
+        <input id="detail-link" class="w-full mt-2 p-3 border border-gray-200 rounded-lg" />
+      </div>
+      <div class="mt-4 flex justify-between items-center">
+        <div>
+          <button id="detail-delete" class="px-4 py-2 bg-red-600 text-white rounded">删除</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="detail-cancel" class="px-4 py-2 bg-gray-100 rounded">取消</button>
+          <button id="detail-save" class="px-4 py-2 bg-indigo-600 text-white rounded">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加模态：同样放在 body 层级 -->
+  <div id="add-modal" class="fixed inset-0 bg-black/40 hidden items-start justify-center z-50 overflow-y-auto">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 mx-4 mt-12 mb-12">
+      <div class="flex items-center justify-between">
+        <h3 class="text-xl font-semibold">添加 Bug</h3>
+        <button id="add-cancel" class="text-gray-500 hover:text-gray-700">关闭 ×</button>
+      </div>
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <div class="text-sm text-gray-500">ID</div>
+          <input id="add-id" class="w-full mt-1 p-2 border border-gray-200 rounded" />
+        </div>
+        <div>
+          <div class="text-sm text-gray-500">现象</div>
+          <input id="add-symptom" class="w-full mt-1 p-2 border border-gray-200 rounded" />
+        </div>
+        <div class="md:col-span-2">
+          <div class="text-sm text-gray-500">解决方案</div>
+          <textarea id="add-solution" rows="3" class="w-full mt-1 p-2 border border-gray-200 rounded"></textarea>
+        </div>
+        <div class="md:col-span-2">
+          <div class="text-sm text-gray-500">链接</div>
+          <input id="add-link" class="w-full mt-1 p-2 border border-gray-200 rounded" />
+        </div>
+        <div class="md:col-span-2">
+          <div class="text-sm text-gray-500">Tag</div>
+          <div class="mt-1 flex flex-wrap items-center gap-2">
+            <input id="add-tag-input" class="flex-1 min-w-[120px] p-2 border border-gray-200 rounded text-sm" placeholder="输入 tag 后点 + 号" />
+            <button id="add-tag-add" class="px-3 py-1 bg-indigo-600 text-white rounded text-sm">+</button>
+          </div>
+          <div id="add-tag-list" class="mt-2 flex flex-wrap gap-2"></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="add-category" class="px-3 py-2 rounded-lg border border-gray-200">
+            <option value="">未分类</option>
+          </select>
+          <input id="add-custom-category" placeholder="自定义分类" class="px-3 py-2 rounded-lg border border-gray-200 hidden" />
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button id="add-save" class="px-4 py-2 bg-green-600 text-white rounded-lg">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // 初始数据（已移除示例条目，使用后端/本地缓存数据）
+  let data = [];
+
+  const STORAGE_KEY = 'bug-dashboard-bugs';
+  const API_BASE = 'http://localhost:3000/api/bugs';
+
+  const categoryMap = {
+    'UI': 'badge-ui',
+    '后端': 'badge-backend',
+    '性能': 'badge-perf',
+    '安全': 'badge-security',
+    '兼容性': 'badge-compat'
+  };
+
+  const $list = document.getElementById('list');
+  const $filter = document.getElementById('filter');
+  const $tagFilter = document.getElementById('tag-filter');
+  const $search = document.getElementById('search');
+  const $counts = document.getElementById('counts');
+  const $empty = document.getElementById('empty');
+  const $reset = document.getElementById('reset');
+  const $activeCats = document.getElementById('active-cats');
+  const $activeTags = document.getElementById('active-tags');
+
+  // 添加表单相关元素（位于模态）
+  const $openAdd = document.getElementById('open-add');
+  const $addModal = document.getElementById('add-modal');
+  const $addId = document.getElementById('add-id');
+  const $addSymptom = document.getElementById('add-symptom');
+  const $addSolution = document.getElementById('add-solution');
+  const $addLink = document.getElementById('add-link');
+  const $addCategory = document.getElementById('add-category');
+  const $addCustomCat = document.getElementById('add-custom-category');
+  const $addSave = document.getElementById('add-save');
+  const $addCancel = document.getElementById('add-cancel');
+  const $addTagInput = document.getElementById('add-tag-input');
+  const $addTagAdd = document.getElementById('add-tag-add');
+  const $addTagList = document.getElementById('add-tag-list');
+
+  // 尝试从后端加载数据，失败时回落到本地初始数据（并保持可离线使用）
+  async function loadFromApi(){
+    try{
+      const res = await fetch(API_BASE);
+      if(!res.ok) throw new Error('fetch failed');
+      const remote = await res.json();
+      if(Array.isArray(remote) && remote.length) {
+        data = remote.concat(data.filter(d=>!remote.find(r=>r.id===d.id)));
+      }
+    }catch(e){
+      console.warn('无法连接后端，使用本地数据回退', e);
+      // 尝试从 localStorage 恢复用户之前的数据（离线场景）
+      try{ const s = localStorage.getItem(STORAGE_KEY); if(s){ const stored = JSON.parse(s); if(Array.isArray(stored)) data = mergeUniqueById(stored.concat(data)); } }catch(err){}
+    }
+  }
+
+  function mergeUniqueById(arr){
+    const map = new Map();
+    arr.forEach(item=>{
+      if(!item || !item.id) return;
+      if(!map.has(item.id)) map.set(item.id, item);
+    });
+    return Array.from(map.values());
+  }
+
+  async function init(){
+    await loadFromApi();
+    populateFilter();
+    populateTagFilter();
+    populateAddCategory();
+    bindEvents();
+    render(data);
+  }
+
+  // 详情模态相关元素
+  const $detailModal = document.getElementById('detail-modal');
+  const $detailId = document.getElementById('detail-id');
+  const $detailCategory = document.getElementById('detail-category');
+  const $detailSymptom = document.getElementById('detail-symptom');
+  const $detailSolution = document.getElementById('detail-solution');
+  const $detailLink = document.getElementById('detail-link');
+  const $detailClose = document.getElementById('detail-close');
+  const $detailCancel = document.getElementById('detail-cancel');
+  const $detailSave = document.getElementById('detail-save');
+  const $detailDelete = document.getElementById('detail-delete');
+  const $detailTagInput = document.getElementById('detail-tag-input');
+  const $detailTagAdd = document.getElementById('detail-tag-add');
+  const $detailTagList = document.getElementById('detail-tag-list');
+
+  let currentDetailId = null;
+  let addTags = [];
+  let detailTags = [];
+  let activeCats = [];
+  let activeTags = [];
+
+  function openDetail(id){
+    const item = data.find(d=>d.id === id);
+    if(!item) return;
+    currentDetailId = id;
+    $detailId.textContent = item.id;
+    populateDetailCategoryOptions(item.category || '未分类');
+    $detailSymptom.value = item.symptom || '';
+    $detailSolution.value = item.solution || '';
+    $detailLink.value = item.link || '';
+    detailTags = Array.isArray(item.tags) ? [...item.tags] : [];
+    renderTagPills($detailTagList, detailTags, (tag)=>removeDetailTag(tag));
+    $detailModal.classList.remove('hidden');
+    $detailModal.classList.add('flex');
+    $detailSymptom.focus();
+  }
+
+  function closeDetail(){
+    currentDetailId = null;
+    $detailModal.classList.add('hidden');
+    $detailModal.classList.remove('flex');
+  }
+
+  $detailClose.addEventListener('click', closeDetail);
+  $detailCancel.addEventListener('click', closeDetail);
+
+  $detailSave.addEventListener('click', async ()=>{
+    if(!currentDetailId) return;
+    const idx = data.findIndex(d=>d.id === currentDetailId);
+    if(idx === -1) return;
+    const newSymptom = $detailSymptom.value.trim();
+    const newSolution = $detailSolution.value.trim();
+    const newLink = $detailLink.value.trim();
+    const newCategory = ($detailCategory.value || '未分类');
+    try{
+      const res = await fetch(API_BASE + '/' + encodeURIComponent(currentDetailId), {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ symptom: newSymptom, category: newCategory, solution: newSolution, link: newLink, tags: detailTags })
+      });
+      if(res.ok){
+        const updated = await res.json();
+        data[idx] = updated;
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+        applyFilter();
+        populateTagFilter();
+        closeDetail();
+      } else {
+        const j = await res.json().catch(()=>({})); alert('保存失败：' + (j.error||res.status));
+      }
+    }catch(e){
+      alert('无法连接后端，更新将在本地保存（离线）');
+      data[idx].symptom = newSymptom;
+      data[idx].solution = newSolution;
+      data[idx].link = newLink;
+      data[idx].tags = [...detailTags];
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(err){}
+      applyFilter();
+      populateTagFilter();
+      closeDetail();
+    }
+  });
+
+  $detailDelete.addEventListener('click', async ()=>{
+    if(!currentDetailId) return;
+    if(!confirm('确定要删除此 Bug 吗？此操作不可恢复。')) return;
+    const idx = data.findIndex(d=>d.id === currentDetailId);
+    if(idx === -1) return;
+    try{
+      const res = await fetch(API_BASE + '/' + encodeURIComponent(currentDetailId), { method: 'DELETE' });
+      if(res.status === 204){
+        data.splice(idx, 1);
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+        applyFilter(); closeDetail();
+      } else {
+        const j = await res.json().catch(()=>({})); alert('删除失败：' + (j.error||res.status));
+      }
+    }catch(e){
+      // 离线回退：在本地删除
+      data.splice(idx, 1);
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(err){}
+      applyFilter(); closeDetail();
+    }
+  });
+
+  function populateFilter(){
+    // 重建筛选项，保留第一个 "全部层面"
+    $filter.innerHTML = '<option value="" disabled selected>全部层面</option>';
+    const cats = Array.from(new Set(data.map(d=>d.category).filter(Boolean)));
+    cats.forEach(c=>{
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      $filter.appendChild(opt);
+    });
+    // 下拉自身不记录多选，仅用于一次选一个加入 activeCats
+    $filter.value = '';
+  }
+
+  function populateTagFilter(){
+    $tagFilter.innerHTML = '<option value="" disabled selected>Tag</option>';
+    const tagSet = new Set();
+    data.forEach(d=>{
+      if(Array.isArray(d.tags)){
+        d.tags.forEach(t=>{
+          if(t) tagSet.add(t);
+        });
+      }
+    });
+    Array.from(tagSet).sort().forEach(t=>{
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      $tagFilter.appendChild(opt);
+    });
+    $tagFilter.selectedIndex = 0;
+  }
+
+  function populateAddCategory(){
+    $addCategory.innerHTML = '<option value="">未分类</option>';
+    const cats = Array.from(new Set(data.map(d=>d.category).filter(Boolean)));
+    cats.forEach(c=>{
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      $addCategory.appendChild(opt);
+    });
+    const customOpt = document.createElement('option');
+    customOpt.value = 'custom';
+    customOpt.textContent = '自定义分类';
+    $addCategory.appendChild(customOpt);
+  }
+
+  function bindEvents(){
+    // 单击即可多选：选中即加入/移除，列表重新过滤
+    $filter.addEventListener('change', ()=>{
+      const val = $filter.value;
+      if(!val) return;
+      if(activeCats.includes(val)){
+        activeCats = activeCats.filter(c=>c !== val);
+      }else{
+        activeCats.push(val);
+      }
+      renderActiveFilters();
+      applyFilter();
+      // 重置回占位，便于再次点击同一选项也触发 change
+      $filter.selectedIndex = 0;
+    });
+
+    $tagFilter.addEventListener('change', ()=>{
+      const val = $tagFilter.value;
+      if(!val) return;
+      if(activeTags.includes(val)){
+        activeTags = activeTags.filter(t=>t !== val);
+      }else{
+        activeTags.push(val);
+      }
+      renderActiveFilters();
+      applyFilter();
+      $tagFilter.selectedIndex = 0;
+    });
+    $search.addEventListener('input', debounce(applyFilter, 180));
+    $reset.addEventListener('click', ()=>{
+      $filter.value = '';
+      $tagFilter.value = '';
+      activeCats = [];
+      activeTags = [];
+      renderActiveFilters();
+      $search.value = '';
+      applyFilter();
+    });
+
+    $addCategory.addEventListener('change', ()=>{
+      if($addCategory.value === 'custom'){
+        $addCustomCat.classList.remove('hidden');
+        $addCustomCat.focus();
+      }else{
+        $addCustomCat.classList.add('hidden');
+      }
+    });
+
+    // 打开添加模态
+    $openAdd.addEventListener('click', ()=>{
+      $addModal.classList.remove('hidden');
+      $addModal.classList.add('flex');
+      // refresh category list
+      populateAddCategory();
+      resetAddTags();
+      $addId.focus();
+    });
+    $addCancel.addEventListener('click', ()=>{
+      $addModal.classList.add('hidden');
+      $addModal.classList.remove('flex');
+    });
+    $addSave.addEventListener('click', ()=>{
+      handleAdd();
+    });
+
+    $addTagAdd.addEventListener('click', ()=>{
+      addTagFromInput();
+    });
+    $addTagInput.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        addTagFromInput();
+      }
+    });
+
+    $detailTagAdd.addEventListener('click', ()=>{
+      addDetailTagFromInput();
+    });
+    $detailTagInput.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        addDetailTagFromInput();
+      }
+    });
+
+    // no-op
+  }
+
+  async function handleAdd(){
+    let id = $addId.value.trim();
+    const symptom = $addSymptom.value.trim();
+    if(!symptom){
+      alert('请填写现象（必填）');
+      $addSymptom.focus();
+      return;
+    }
+    const solution = ($addSolution && $addSolution.value) ? $addSolution.value.trim() : '';
+    let category = $addCategory.value === 'custom' ? $addCustomCat.value.trim() : $addCategory.value;
+    category = category || '未分类';
+
+    // 请求后端新增（后端会生成 ID 如果未提供）
+    try{
+      const body = { id: id || undefined, symptom, category, solution, tags: addTags };
+      if($addLink){ body.link = $addLink.value.trim(); }
+      const res = await fetch(API_BASE, {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+      });
+      if(res.status === 201){
+        const created = await res.json();
+        data.unshift(created);
+        // 本地缓存一份以支持离线
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(e){}
+        populateFilter();
+        populateTagFilter();
+        populateAddCategory();
+        applyFilter();
+        // 清理表单并关闭模态
+        $addId.value = '';
+        $addSymptom.value = '';
+        if($addSolution) $addSolution.value = '';
+        if($addLink) $addLink.value = '';
+        $addCategory.value = '';
+        $addCustomCat.value = '';
+        $addCustomCat.classList.add('hidden');
+        resetAddTags();
+        $addSymptom.focus();
+        $addModal.classList.add('hidden'); $addModal.classList.remove('flex');
+      } else if(res.status === 409){
+        const j = await res.json(); alert('新增失败：' + (j.error || '冲突')); $addId.focus();
+      } else {
+        const j = await res.json().catch(()=>({})); alert('新增失败'); console.warn('add failed', j);
+      }
+    }catch(e){
+      alert('无法连接到后端，新增将保存在本地（离线模式）');
+      // 离线回退：在本地生成 ID 并保存到 localStorage
+      if(!id){ const nums = data.map(d=>{ const m = (d.id||'').match(/(\d+)$/); return m ? parseInt(m[1],10) : 0; }); const max = nums.length ? Math.max(...nums) : 0; id = 'BUG-' + String(max + 1).padStart(3, '0'); }
+      if(data.find(d=>d.id===id)){ alert('ID 已存在，请使用其它 ID'); $addId.focus(); return; }
+      const item = { id, symptom, category, solution, tags: [...addTags] };
+      if($addLink) item.link = $addLink.value.trim();
+      data.unshift(item);
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }catch(err){}
+      populateFilter();
+      populateAddCategory();
+      populateTagFilter();
+      applyFilter();
+      $addId.value='';
+      $addSymptom.value='';
+      if($addSolution) $addSolution.value='';
+      if($addLink) $addLink.value='';
+      $addCategory.value='';
+      $addCustomCat.value='';
+      $addCustomCat.classList.add('hidden');
+      resetAddTags();
+      $addSymptom.focus();
+      $addModal.classList.add('hidden'); $addModal.classList.remove('flex');
+    }
+  }
+
+  function applyFilter(){
+    const q = $search.value.trim().toLowerCase();
+    let filtered = data.filter(item=>{
+      // 分类采用并集：只要有一个 activeCats 命中即可
+      const matchesCat = activeCats.length
+        ? activeCats.some(cat => cat === item.category)
+        : true;
+      const tagsArr = Array.isArray(item.tags) ? item.tags : [];
+      // Tag 仍为交集
+      const matchesTag = activeTags.length
+        ? activeTags.every(t => tagsArr.includes(t))
+        : true;
+      const matchesQ = q ? (item.id.toLowerCase().includes(q) || item.symptom.toLowerCase().includes(q)) : true;
+      return matchesCat && matchesTag && matchesQ;
+    });
+    render(filtered);
+  }
+
+  function render(list){
+    $list.innerHTML = '';
+    if(list.length === 0){
+      $empty.classList.remove('hidden');
+      $counts.textContent = '';
+      return;
+    }
+    $empty.classList.add('hidden');
+    $counts.textContent = `${list.length} 个结果`;
+
+    list.forEach(item=>{
+      const safeId = escapeHtml(item.id || '');
+      const safeSymptom = escapeHtml((item.symptom || '').trim() || '无描述');
+      const catClass = categoryMap[item.category] || 'bg-gray-200';
+      const catLabel = escapeHtml(item.category || '未分类');
+      const tagsArr = Array.isArray(item.tags) ? item.tags : [];
+      const el = document.createElement('div');
+      el.className = 'bg-white rounded-xl p-5 shadow-sm card-hover fade-in cursor-pointer';
+      el.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-lg font-semibold mt-1">${safeId}</div>
+          </div>
+          <div class="text-right">
+            <div class="inline-block px-3 py-1 rounded-full text-xs font-medium ${catClass}">${catLabel}</div>
+          </div>
+        </div>
+        <div class="mt-3 text-sm text-gray-700">${safeSymptom}</div>
+        ${tagsArr.length ? `
+        <div class="mt-3 flex flex-wrap gap-2">
+          ${tagsArr.map(t => `<span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs">${escapeHtml(t)}</span>`).join('')}
+        </div>` : ''}
+      `;
+
+      // 打开详情（点击卡片）
+      el.addEventListener('click', ()=>openDetail(item.id));
+
+      $list.appendChild(el);
+    });
+  }
+
+  function debounce(fn, wait){
+    let t;
+    return function(...args){
+      clearTimeout(t);
+      t = setTimeout(()=>fn.apply(this,args), wait);
+    }
+  }
+
+  function escapeHtml(str){
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  init();
+
+  // tag 处理相关工具函数
+  function renderTagPills(container, tags, onRemove){
+    if(!container) return;
+    container.innerHTML = '';
+    if(!tags || !tags.length){
+      container.classList.add('hidden');
+      return;
+    }
+    container.classList.remove('hidden');
+    tags.forEach(tag=>{
+      const pill = document.createElement('span');
+      pill.className = 'px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs flex items-center gap-1';
+      pill.innerHTML = `<span>${escapeHtml(tag)}</span><button type="button" class="text-indigo-500 hover:text-indigo-700 text-xs">×</button>`;
+      const btn = pill.querySelector('button');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        onRemove(tag);
+      });
+      container.appendChild(pill);
+    });
+  }
+
+  function resetAddTags(){
+    addTags = [];
+    if($addTagInput) $addTagInput.value = '';
+    renderTagPills($addTagList, addTags, (tag)=>removeAddTag(tag));
+  }
+
+  function addTagFromInput(){
+    if(!$addTagInput) return;
+    const val = $addTagInput.value.trim();
+    if(!val) return;
+    if(!addTags.includes(val)){
+      addTags.push(val);
+      renderTagPills($addTagList, addTags, (tag)=>removeAddTag(tag));
+    }
+    $addTagInput.value = '';
+    $addTagInput.focus();
+  }
+
+  function removeAddTag(tag){
+    addTags = addTags.filter(t=>t !== tag);
+    renderTagPills($addTagList, addTags, (t)=>removeAddTag(t));
+  }
+
+  function addDetailTagFromInput(){
+    if(!$detailTagInput) return;
+    const val = $detailTagInput.value.trim();
+    if(!val) return;
+    if(!detailTags.includes(val)){
+      detailTags.push(val);
+      renderTagPills($detailTagList, detailTags, (tag)=>removeDetailTag(tag));
+    }
+    $detailTagInput.value = '';
+    $detailTagInput.focus();
+  }
+
+  function removeDetailTag(tag){
+    detailTags = detailTags.filter(t=>t !== tag);
+    renderTagPills($detailTagList, detailTags, (t)=>removeDetailTag(t));
+  }
+
+  function populateDetailCategoryOptions(selected){
+    if(!$detailCategory) return;
+    const cats = Array.from(new Set(data.map(d=>d.category).filter(Boolean)));
+    $detailCategory.innerHTML = '<option value="">未分类</option>';
+    cats.forEach(c=>{
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      $detailCategory.appendChild(opt);
+    });
+    $detailCategory.value = selected || '';
+  }
+
+  function renderActiveFilters(){
+    if($activeCats){
+      $activeCats.innerHTML = '';
+      activeCats.forEach(cat=>{
+        const pill = document.createElement('span');
+        pill.className = 'px-2 py-1 rounded-full bg-slate-100 text-slate-700 flex items-center gap-1';
+        pill.innerHTML = `<span>层面: ${escapeHtml(cat)}</span><button type="button" class="text-slate-400 hover:text-slate-700 text-xs">×</button>`;
+        pill.querySelector('button').addEventListener('click', (e)=>{
+          e.stopPropagation();
+          activeCats = activeCats.filter(c=>c !== cat);
+          renderActiveFilters();
+          applyFilter();
+        });
+        $activeCats.appendChild(pill);
+      });
+    }
+    if($activeTags){
+      $activeTags.innerHTML = '';
+      activeTags.forEach(tag=>{
+        const pill = document.createElement('span');
+        pill.className = 'px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 flex items-center gap-1';
+        pill.innerHTML = `<span>Tag: ${escapeHtml(tag)}</span><button type="button" class="text-indigo-300 hover:text-indigo-700 text-xs">×</button>`;
+        pill.querySelector('button').addEventListener('click', (e)=>{
+          e.stopPropagation();
+          activeTags = activeTags.filter(t=>t !== tag);
+          renderActiveFilters();
+          applyFilter();
+        });
+        $activeTags.appendChild(pill);
+      });
+    }
+  }
+  </script>
+</body>
+</html>
